@@ -1,0 +1,54 @@
+USE MASTER
+GO
+
+CREATE DATABASE QLIK_ETL
+GO
+
+USE [QLIK_ETL]
+GO
+
+CREATE TABLE [COLUMNS](
+	[TABLE_ID] [int] NOT NULL,
+	[COLUMN_ID] [int] NOT NULL,
+	[COLUMN_NAME] [nvarchar](64) NOT NULL,
+	[FIELD_NAME] [nvarchar](64) NOT NULL,
+	[COMMENT] [nvarchar](4000) NULL,
+	[TAG] [nvarchar](4000) NULL,
+	[TYPE] [char](16) NULL
+)
+GO
+
+CREATE TABLE [TABLES](
+	[TABLE_ID] [int] NOT NULL,
+	[SOURCE_TABLE] [nvarchar](64) NOT NULL,
+	[QLIK_TABLE] [nvarchar](64) NOT NULL,
+	[COMMENT] [nvarchar](64) NULL,
+	[DB] [nvarchar](32) NULL
+) ON [PRIMARY]
+
+GO
+
+CREATE TABLE [VERSIONS](
+	[ID] [int] IDENTITY(1,1) NOT NULL,
+	[TABLE_ID] [int] NOT NULL,
+	[COLUMN_ID] [int] NOT NULL,
+	[VERSION] [int] NOT NULL,
+	[VERSION COMMENT] [nvarchar](255) NULL,
+	[DB] [nvarchar](32) NULL
+) ON [PRIMARY]
+
+GO
+
+CREATE TABLE [LOG](
+	[ID] [int] IDENTITY(1,1) NOT NULL,
+	[SOURCE TABLE] [varchar](128) NOT NULL,
+	[QLIK TABLE] [varchar](128) NOT NULL,
+	[QVD SIZE] [int] NULL,
+	[RESULT] [varchar](512) NOT NULL,
+	[ROWS] [int] NULL,
+	[BATCHID] [varchar](32) NOT NULL,
+	[BATCHSTART] [datetime] NOT NULL,
+	[DATETIME] [datetime] NOT NULL
+) ON [PRIMARY]
+
+GO
