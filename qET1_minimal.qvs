@@ -1,0 +1,78 @@
+// VERSION: 1.06
+// DATE:    2016-05-10
+
+ODBC CONNECT TO MSSQL;
+
+SUB $_Prepare_Extract
+	FIELDS:
+		SQL	SELECT * FROM QLIK_ETL.dbo.VERSIONED_COLUMNS WHERE VERSION=$(version) ORDER BY QT, COLUMN_ID;
+
+	TABLES:
+		LOAD * WHERE Exists(SOURCE_TABLE)  ; SQL SELECT * FROM QLIK_ETL.dbo.TABLES;
+
+	[MAP_ADD_COMMENTS]:
+		MAPPING LOAD
+			FIELD_NAME AS FIELD
+			, 	'__________________________________________' & Chr(10) & '  COMMENT: ' & Chr(10) & '  ' & FIELD_COMMENT & Chr(10) & 
+				'__________________________________________' & Chr(10) & '  BUSINESS RULE: ' & Chr(10) & '  ' & FIELD_COMMENT & Chr(10) & 
+			    '__________________________________________' & Chr(10) & '  SOURCE: ' & Chr(10) & '  ' & SOURCE_TABLE & '.' & COLUMN_NAME & '.'  & Chr(10)& Chr(10)
+			  AS COMMENTS
+		RESIDENT
+			[FIELDS];	
+	
+	[MAP_NAME_FIELDS]:
+		MAPPING LOAD
+			[SOURCE_TABLE] & '.' & [COLUMN_NAME], [FIELD_NAME]    /* Capitalize(Replace(Replace(Replace(Replace([ET.Transform_Felt],'_',' '),'AA','Å'),'OE','Ø'),'AE','Æ')) */
+		RESIDENT
+			[FIELDS]	;
+		UNQUALIFY *;
+ENDSUB
+
+SUB $_OneDBtableToQVD( DBtable , QlikTable , DB )
+	[LOAD and SQL]:
+	LOAD
+		'[$(QlikTable)]:' & Chr(10)
+		& 'LOAD ' & Chr(10) & '    ' & Concat(DISTINCT TYPE & '([' & COLUMN_NAME & ']) AS [' & COLUMN_NAME & ']', ',' & Chr(10) & '    ' , COLUMN_ID) & ' ; ' & Chr(10)
+		& 'SQL ' & Chr(10) & '  SELECT $(SELECT_TOP)' & Chr(10) & '    ' & Concat(DISTINCT COLUMN_NAME , ',' & Chr(10) & '    ' , COLUMN_ID) & Chr(10) 
+		& '  FROM' & Chr(10) & '    $(DB).$(DBtable); ' & Chr(10) AS LOAD_AND_SQL_STATEMENT
+	RESIDENT
+		[FIELDS]
+	WHERE
+		SOURCE_TABLE = '$(DBtable)'
+	GROUP BY
+		SOURCE_TABLE;
+
+ 	LET loadSQL = loadSQL & 	
+ 		Peek('LOAD_AND_SQL_STATEMENT',0,'LOAD and SQL') &
+		'RENAME FIELDS USING [MAP_NAME_FIELDS];' & Chr(10) &
+		'COMMENT FIELDS USING [MAP_ADD_COMMENTS];' & Chr(10) &
+		'STORE [$(QlikTable)] INTO "$(QlikTable).QVD" (QVD);' & Chr(10) &
+		'IF logging THEN' & Chr(10) &
+		'  noOfRows = NoOfRows(''$(QlikTable)'');' & Chr(10) &
+		'  now = Date(Now(),''YYYY-MM-DD hh:mm:ss'');' & Chr(10) &
+		'  fileSize = FileSize(''$(QlikTable).QVD'');' & Chr(10) &
+		'  SQL INSERT INTO QLIK_ETL..LOG VALUES(''$(DBtable)'',''$(QlikTable)'',$' & '(fileSize),''LOADED'',$' & '(noOfRows),''QET1'',''$' & '(batchStart)'',''$' & '(now)'');' & Chr(10) &
+		'  noOfRows=; now=; fileSize=;' & Chr(10) &
+		'ENDIF' & Chr(10) &
+		'DROP TABLE [$(QlikTable)];' & Chr(10) & Chr(10)
+	;
+	DROP TABLE [LOAD and SQL];
+ENDSUB
+
+SET ErrorMode = 0;
+version = 3;
+CALL $_Prepare_Extract
+
+logging = True();
+maxTableNo = NoOfRows('TABLES');
+SELECT_TOP = ' ';  									// A LIMIT ON NUMBER OF ROWS RETURNED FROM A SQL SELECT
+batchStart = Date(Now(),'YYYY-MM-DD hh:mm:ss');
+
+loadSQL = '';
+FOR tableIndex = 0 TO NoOfRows('TABLES')-1
+	CALL $_OneDBtableToQVD( Peek('SOURCE_TABLE',tableIndex,'TABLES') , Peek('QLIK_TABLE',tableIndex,'TABLES') , Peek('DB',tableIndex,'TABLES') );
+NEXT
+
+$(loadSQL);
+
+loadSQL=;version=;tableIndex=;logging=;maxTableNo=;SELECT_TOP=;batchStart=;   // GARBARGE COLLECTION .... DELETE ALL VARIABLES THAT ARE ONLY LOAD SCRIPT VARIABLIES
